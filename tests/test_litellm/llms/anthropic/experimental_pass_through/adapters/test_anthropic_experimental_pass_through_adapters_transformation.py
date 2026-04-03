@@ -43,9 +43,7 @@ def test_translate_streaming_openai_chunk_to_anthropic_content_block():
                 tool_calls=[
                     ChatCompletionDeltaToolCall(
                         id="call_d581d130-e234-4315-94e8-27e7ff7c4e55",
-                        function=Function(
-                            arguments='{"location": "Boston"}', name="get_weather"
-                        ),
+                        function=Function(arguments='{"location": "Boston"}', name="get_weather"),
                         type="function",
                         index=0,
                     )
@@ -59,9 +57,7 @@ def test_translate_streaming_openai_chunk_to_anthropic_content_block():
     (
         block_type,
         content_block_start,
-    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic_content_block(
-        choices=choices
-    )
+    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic_content_block(choices=choices)
 
     print(content_block_start)
 
@@ -110,9 +106,7 @@ def test_translate_streaming_openai_chunk_to_anthropic_thinking_content_block():
     (
         block_type,
         content_block_start,
-    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic_content_block(
-        choices=choices
-    )
+    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic_content_block(choices=choices)
 
     assert block_type == "thinking"
     assert content_block_start == {
@@ -158,9 +152,7 @@ def test_translate_streaming_openai_chunk_to_anthropic_thinking_signature_block(
     (
         block_type,
         content_block_start,
-    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic_content_block(
-        choices=choices
-    )
+    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic_content_block(choices=choices)
 
     assert block_type == "thinking"
     assert content_block_start == {
@@ -204,9 +196,7 @@ def test_translate_streaming_openai_chunk_to_anthropic_raises_when_thinking_and_
     ]
 
     with pytest.raises(ValueError):
-        LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic_content_block(
-            choices=choices
-        )
+        LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic_content_block(choices=choices)
 
 
 def test_translate_anthropic_messages_to_openai_thinking_blocks():
@@ -247,10 +237,7 @@ def test_translate_anthropic_messages_to_openai_thinking_blocks():
     assert "thinking_blocks" in result[1]
     assert len(result[1]["thinking_blocks"]) == 2
     assert result[1]["thinking_blocks"][0]["type"] == "thinking"
-    assert (
-        result[1]["thinking_blocks"][0]["thinking"]
-        == "I will call the get_weather tool."
-    )
+    assert result[1]["thinking_blocks"][0]["thinking"] == "I will call the get_weather tool."
     assert result[1]["thinking_blocks"][0]["signature"] == "sigsig"
     assert result[1]["thinking_blocks"][1]["type"] == "redacted_thinking"
     assert result[1]["thinking_blocks"][1]["data"] == "REDACTED"
@@ -311,9 +298,7 @@ def test_translate_anthropic_messages_to_openai_tool_message_placement():
 
     assert tool_message_idx is not None, "Tool message not found"
     assert user_message_idx is not None, "User message not found"
-    assert (
-        tool_message_idx < user_message_idx
-    ), "Tool message should be placed before user message"
+    assert tool_message_idx < user_message_idx, "Tool message should be placed before user message"
 
 
 def test_translate_openai_content_to_anthropic_empty_function_arguments():
@@ -329,7 +314,8 @@ def test_translate_openai_content_to_anthropic_empty_function_arguments():
                         id="call_empty_args",
                         type="function",
                         function=Function(
-                            name="test_function", arguments=""  # empty arguments string
+                            name="test_function",
+                            arguments="",  # empty arguments string
                         ),
                     )
                 ],
@@ -395,9 +381,7 @@ def test_translate_openai_response_to_anthropic_text_and_tool_calls():
                         ChatCompletionAssistantToolCall(
                             id="call_tool_combo",
                             type="function",
-                            function=Function(
-                                name="get_weather", arguments='{"location": "Paris"}'
-                            ),
+                            function=Function(name="get_weather", arguments='{"location": "Paris"}'),
                         )
                     ],
                 ),
@@ -407,9 +391,7 @@ def test_translate_openai_response_to_anthropic_text_and_tool_calls():
     )
 
     adapter = LiteLLMAnthropicMessagesAdapter()
-    anthropic_response = adapter.translate_openai_response_to_anthropic(
-        response=openai_response
-    )
+    anthropic_response = adapter.translate_openai_response_to_anthropic(response=openai_response)
 
     anthropic_content = anthropic_response.get("content")
     assert anthropic_content is not None
@@ -450,9 +432,7 @@ def test_translate_streaming_openai_chunk_to_anthropic_with_partial_json():
     (
         type_of_content,
         content_block_delta,
-    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic(
-        choices=choices
-    )
+    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic(choices=choices)
 
     print("Type of content:", type_of_content)
     print("Content block delta:", content_block_delta)
@@ -527,9 +507,7 @@ def test_translate_streaming_openai_chunk_to_anthropic_with_thinking():
     (
         type_of_content,
         content_block_delta,
-    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic(
-        choices=choices
-    )
+    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic(choices=choices)
 
     assert type_of_content == "thinking_delta"
     assert content_block_delta["type"] == "thinking_delta"
@@ -572,9 +550,7 @@ def test_translate_streaming_openai_chunk_to_anthropic_with_thinking():
     (
         type_of_content,
         content_block_delta,
-    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic(
-        choices=choices
-    )
+    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic(choices=choices)
 
     assert type_of_content == "signature_delta"
     assert content_block_delta["type"] == "signature_delta"
@@ -615,9 +591,7 @@ def test_translate_streaming_openai_chunk_to_anthropic_raises_when_thinking_and_
     ]
 
     with pytest.raises(ValueError):
-        LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic(
-            choices=choices
-        )
+        LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic(choices=choices)
 
 
 def test_translate_anthropic_messages_to_openai_user_message_with_base64_image():
@@ -655,9 +629,7 @@ def test_translate_anthropic_messages_to_openai_user_message_with_base64_image()
     # Check image content
     assert result[0]["content"][1]["type"] == "image_url"
     assert "image_url" in result[0]["content"][1]
-    assert result[0]["content"][1]["image_url"]["url"].startswith(
-        "data:image/png;base64,"
-    )
+    assert result[0]["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
     assert (
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         in result[0]["content"][1]["image_url"]["url"]
@@ -695,18 +667,14 @@ def test_translate_anthropic_messages_to_openai_user_message_with_url_image():
     # Check image content
     assert result[0]["content"][1]["type"] == "image_url"
     assert "image_url" in result[0]["content"][1]
-    assert (
-        result[0]["content"][1]["image_url"]["url"] == "https://example.com/forest.jpg"
-    )
+    assert result[0]["content"][1]["image_url"]["url"] == "https://example.com/forest.jpg"
 
 
 def test_translate_anthropic_messages_to_openai_tool_result_with_base64_image():
     """Test that base64 images in tool results are correctly translated to OpenAI format."""
 
     anthropic_messages = [
-        AnthropicMessagesUserMessageParam(
-            role="user", content=[{"type": "text", "text": "Take a screenshot"}]
-        ),
+        AnthropicMessagesUserMessageParam(role="user", content=[{"type": "text", "text": "Take a screenshot"}]),
         AnthopicMessagesAssistantMessageParam(
             role="assistant",
             content=[
@@ -854,9 +822,7 @@ def test_translate_anthropic_messages_to_openai_mixed_content_with_image():
 
     # Check first image (base64)
     assert result[0]["content"][1]["type"] == "image_url"
-    assert result[0]["content"][1]["image_url"]["url"].startswith(
-        "data:image/png;base64,"
-    )
+    assert result[0]["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
 
     # Check middle text
     assert result[0]["content"][2]["type"] == "text"
@@ -864,9 +830,7 @@ def test_translate_anthropic_messages_to_openai_mixed_content_with_image():
 
     # Check second image (URL)
     assert result[0]["content"][3]["type"] == "image_url"
-    assert (
-        result[0]["content"][3]["image_url"]["url"] == "https://example.com/image2.jpg"
-    )
+    assert result[0]["content"][3]["image_url"]["url"] == "https://example.com/image2.jpg"
 
     # Check final text
     assert result[0]["content"][4]["type"] == "text"
@@ -912,10 +876,7 @@ def test_translate_anthropic_messages_to_openai_tool_use_with_signature():
     assert tool_call["id"] == "call_386f67af31f9415781bc35071405"
     assert "function" in tool_call
     assert "provider_specific_fields" in tool_call["function"]
-    assert (
-        tool_call["function"]["provider_specific_fields"]["thought_signature"]
-        == test_signature
-    )
+    assert tool_call["function"]["provider_specific_fields"]["thought_signature"] == test_signature
 
 
 def test_translate_anthropic_messages_to_openai_tool_result_with_multiple_content_items():
@@ -973,9 +934,7 @@ def test_translate_anthropic_messages_to_openai_tool_result_with_multiple_conten
     result = adapter.translate_anthropic_messages_to_openai(messages=anthropic_messages)
 
     # Count how many tool messages have the same tool_call_id
-    tool_messages = [
-        msg for msg in result if isinstance(msg, dict) and msg.get("role") == "tool"
-    ]
+    tool_messages = [msg for msg in result if isinstance(msg, dict) and msg.get("role") == "tool"]
     tool_call_ids = [msg.get("tool_call_id") for msg in tool_messages]
 
     # The critical assertion: each tool_call_id should appear only ONCE
@@ -991,12 +950,8 @@ def test_translate_anthropic_messages_to_openai_tool_result_with_multiple_conten
     # The content should be a list with all items combined
     tool_message = tool_messages[0]
     assert tool_message["tool_call_id"] == "toolu_016hYHBkTf4JDF3p22UoYk5C"
-    assert isinstance(
-        tool_message["content"], list
-    ), "Multiple content items should be combined into a list"
-    assert (
-        len(tool_message["content"]) == 3
-    ), f"Expected 3 content items, got {len(tool_message['content'])}"
+    assert isinstance(tool_message["content"], list), "Multiple content items should be combined into a list"
+    assert len(tool_message["content"]) == 3, f"Expected 3 content items, got {len(tool_message['content'])}"
 
     # Verify content types
     assert tool_message["content"][0]["type"] == "text"
@@ -1045,17 +1000,14 @@ def test_translate_anthropic_messages_to_openai_tool_result_single_item_backward
     adapter = LiteLLMAnthropicMessagesAdapter()
     result = adapter.translate_anthropic_messages_to_openai(messages=anthropic_messages)
 
-    tool_messages = [
-        msg for msg in result if isinstance(msg, dict) and msg.get("role") == "tool"
-    ]
+    tool_messages = [msg for msg in result if isinstance(msg, dict) and msg.get("role") == "tool"]
 
     assert len(tool_messages) == 1
     tool_message = tool_messages[0]
 
     # Single item should be a string for backward compatibility
     assert isinstance(tool_message["content"], str), (
-        f"Single content item should be a string for backward compatibility, "
-        f"got {type(tool_message['content'])}"
+        f"Single content item should be a string for backward compatibility, got {type(tool_message['content'])}"
     )
     assert tool_message["content"] == "72°F and sunny"
 
@@ -1104,9 +1056,7 @@ def test_streaming_chunk_with_both_text_and_tool_calls_issue_18238():
     (
         block_type,
         content_block_start,
-    ) = adapter._translate_streaming_openai_chunk_to_anthropic_content_block(
-        choices=choices
-    )
+    ) = adapter._translate_streaming_openai_chunk_to_anthropic_content_block(choices=choices)
 
     assert block_type == "tool_use"
     assert content_block_start["name"] == "Bash"
@@ -1400,6 +1350,124 @@ def test_cache_control_preserved_in_tools_for_claude():
     assert tool_name_mapping == {}  # No truncation needed for short names
 
 
+def test_translate_tool_result_with_unrecognized_content_type():
+    """
+    Test that tool_result messages with unrecognized content types
+    (e.g. tool_reference) are preserved and not silently dropped.
+
+    Regression test for https://github.com/BerriAI/litellm/issues/22841
+    """
+    adapter = LiteLLMAnthropicMessagesAdapter()
+
+    # Multiple unrecognized content items inside tool_result
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "content": [
+                        {"type": "tool_reference", "tool_name": "WebFetch"},
+                        {"type": "tool_reference", "tool_name": "Bash"},
+                    ],
+                    "tool_use_id": "toolu_bdrk_01VF2YzMxv46Vya6iG1MfL34",
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+        }
+    ]
+
+    result = adapter.translate_anthropic_messages_to_openai(messages)
+
+    # The tool_result must NOT be dropped
+    assert len(result) == 1, f"Expected 1 message but got {len(result)} – tool_result was dropped"
+    msg = result[0]
+    assert msg["role"] == "tool"
+    assert msg["tool_call_id"] == "toolu_bdrk_01VF2YzMxv46Vya6iG1MfL34"
+
+    # Content should be a list with 2 text parts (serialised JSON)
+    assert isinstance(msg["content"], list)
+    assert len(msg["content"]) == 2
+    for part in msg["content"]:
+        assert part["type"] == "text"
+        assert "tool_reference" in part["text"]
+
+
+def test_translate_tool_result_single_unrecognized_content_type():
+    """
+    When tool_result has a single-element content list with an unrecognized
+    type, the message must still be preserved.
+
+    Regression test for https://github.com/BerriAI/litellm/issues/22841
+    """
+    adapter = LiteLLMAnthropicMessagesAdapter()
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "content": [
+                        {"type": "tool_reference", "tool_name": "WebFetch"},
+                    ],
+                    "tool_use_id": "toolu_xxx",
+                }
+            ],
+        }
+    ]
+
+    result = adapter.translate_anthropic_messages_to_openai(messages)
+
+    assert len(result) == 1
+    msg = result[0]
+    assert msg["role"] == "tool"
+    assert msg["tool_call_id"] == "toolu_xxx"
+    # Single item: content is a plain JSON string
+    assert isinstance(msg["content"], str)
+    assert "tool_reference" in msg["content"]
+
+
+def test_translate_tool_result_mixed_known_and_unknown_content():
+    """
+    When tool_result content mixes known types (text) with unknown types,
+    all items must be preserved.
+
+    Regression test for https://github.com/BerriAI/litellm/issues/22841
+    """
+    adapter = LiteLLMAnthropicMessagesAdapter()
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "content": [
+                        {"type": "text", "text": "some result"},
+                        {"type": "tool_reference", "tool_name": "WebFetch"},
+                    ],
+                    "tool_use_id": "toolu_yyy",
+                }
+            ],
+        }
+    ]
+
+    result = adapter.translate_anthropic_messages_to_openai(messages)
+
+    assert len(result) == 1
+    msg = result[0]
+    assert msg["role"] == "tool"
+    assert isinstance(msg["content"], list)
+    assert len(msg["content"]) == 2
+    # First part is the known text
+    assert msg["content"][0]["type"] == "text"
+    assert msg["content"][0]["text"] == "some result"
+    # Second part is the serialised unknown content
+    assert msg["content"][1]["type"] == "text"
+    assert "tool_reference" in msg["content"][1]["text"]
+
+
 def test_cache_control_not_preserved_in_tools_for_non_claude():
     """Cache control should NOT be preserved in tools for non-Claude models."""
     tools = [
@@ -1442,7 +1510,7 @@ def test_translate_openai_content_to_anthropic_reasoning_content_without_thinkin
     """
     Test that reasoning_content is converted to thinking block when thinking_blocks is not present.
     This handles providers like OpenRouter that return reasoning_content instead of thinking_blocks.
-    
+
     Regression test for: OpenRouter models returning reasoning_content in /v1/messages endpoint
     should be converted to Anthropic's thinking block format.
     """
@@ -1450,7 +1518,7 @@ def test_translate_openai_content_to_anthropic_reasoning_content_without_thinkin
         Choices(
             message=Message(
                 role="assistant",
-                content="There are **3** \"r\"s in the word strawberry.",
+                content='There are **3** "r"s in the word strawberry.',
                 reasoning_content="**Considering Letter Frequency**\n\nI've homed in on the specifics: The task focuses on counting the letter 'r'. I've identified the target word, \"strawberry,\" and confirmed my understanding of the letter's location. The first 'r' follows 't', the second after 'e', and the third… well, I'm almost there.\n\n\n**Calculating the Count**\n\nMy analysis is complete! I've confirmed that the letter \"r\" appears three times in \"strawberry.\" The first follows \"t,\" the second \"e,\" and the third immediately follows the second. The count is definitively three.",
             )
         )
@@ -1467,15 +1535,15 @@ def test_translate_openai_content_to_anthropic_reasoning_content_without_thinkin
     assert result[0]["signature"] is None
     # Second block should be text block with content
     assert result[1]["type"] == "text"
-    assert result[1]["text"] == "There are **3** \"r\"s in the word strawberry."
+    assert result[1]["text"] == 'There are **3** "r"s in the word strawberry.'
 
 
 def test_translate_streaming_openai_chunk_to_anthropic_reasoning_content_without_thinking_blocks():
     """
-    Test that reasoning_content in streaming chunks is converted to thinking_delta 
+    Test that reasoning_content in streaming chunks is converted to thinking_delta
     when thinking_blocks is not present.
-    
-    This handles providers like OpenRouter that return reasoning_content in streaming 
+
+    This handles providers like OpenRouter that return reasoning_content in streaming
     responses without thinking_blocks.
     """
     choices = [
@@ -1497,9 +1565,7 @@ def test_translate_streaming_openai_chunk_to_anthropic_reasoning_content_without
     (
         type_of_content,
         content_block_delta,
-    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic(
-        choices=choices
-    )
+    ) = LiteLLMAnthropicMessagesAdapter()._translate_streaming_openai_chunk_to_anthropic(choices=choices)
 
     assert type_of_content == "thinking_delta"
     assert content_block_delta["type"] == "thinking_delta"
@@ -1508,9 +1574,9 @@ def test_translate_streaming_openai_chunk_to_anthropic_reasoning_content_without
 
 def test_translate_openai_response_to_anthropic_with_reasoning_content_only():
     """
-    Test the full response translation when only reasoning_content is present 
+    Test the full response translation when only reasoning_content is present
     (no thinking_blocks).
-    
+
     This simulates OpenRouter's response format being translated to Anthropic format
     through /v1/messages endpoint.
     """
@@ -1522,7 +1588,7 @@ def test_translate_openai_response_to_anthropic_with_reasoning_content_only():
                 finish_reason="stop",
                 message=Message(
                     role="assistant",
-                    content="There are **3** \"r\"s in the word strawberry.",
+                    content='There are **3** "r"s in the word strawberry.',
                     reasoning_content="**Considering Letter Frequency**\n\nI've homed in on the specifics: The task focuses on counting the letter 'r'.",
                 ),
             )
@@ -1531,23 +1597,21 @@ def test_translate_openai_response_to_anthropic_with_reasoning_content_only():
     )
 
     adapter = LiteLLMAnthropicMessagesAdapter()
-    anthropic_response = adapter.translate_openai_response_to_anthropic(
-        response=openai_response
-    )
+    anthropic_response = adapter.translate_openai_response_to_anthropic(response=openai_response)
 
     anthropic_content = anthropic_response.get("content")
     assert anthropic_content is not None
     assert len(anthropic_content) == 2
-    
+
     # First block should be thinking
     assert anthropic_content[0]["type"] == "thinking"
     assert "Considering Letter Frequency" in anthropic_content[0]["thinking"]
     assert anthropic_content[0].get("signature") is None
-    
+
     # Second block should be text
     assert anthropic_content[1]["type"] == "text"
-    assert anthropic_content[1]["text"] == "There are **3** \"r\"s in the word strawberry."
-    
+    assert anthropic_content[1]["text"] == 'There are **3** "r"s in the word strawberry.'
+
     assert anthropic_response.get("stop_reason") == "end_turn"
 
 
@@ -1643,9 +1707,7 @@ def test_translate_anthropic_tools_with_long_names():
     ]
 
     adapter = LiteLLMAnthropicMessagesAdapter()
-    result, tool_name_mapping = adapter.translate_anthropic_tools_to_openai(
-        tools=tools, model="gpt-4"
-    )
+    result, tool_name_mapping = adapter.translate_anthropic_tools_to_openai(tools=tools, model="gpt-4")
 
     assert len(result) == 1
     # The tool name should be truncated
@@ -1667,9 +1729,7 @@ def test_translate_anthropic_tools_mixed_names():
     ]
 
     adapter = LiteLLMAnthropicMessagesAdapter()
-    result, tool_name_mapping = adapter.translate_anthropic_tools_to_openai(
-        tools=tools, model="gpt-4"
-    )
+    result, tool_name_mapping = adapter.translate_anthropic_tools_to_openai(tools=tools, model="gpt-4")
 
     assert len(result) == 2
     # Short name unchanged
@@ -1715,9 +1775,7 @@ def test_translate_openai_response_restores_tool_names():
     )
 
     adapter = LiteLLMAnthropicMessagesAdapter()
-    result = adapter.translate_openai_response_to_anthropic(
-        response=response, tool_name_mapping=tool_name_mapping
-    )
+    result = adapter.translate_openai_response_to_anthropic(response=response, tool_name_mapping=tool_name_mapping)
 
     # Find the tool_use block in the response
     tool_use_blocks = [c for c in result["content"] if c.get("type") == "tool_use"]
@@ -1729,18 +1787,18 @@ def test_translate_openai_response_restores_tool_names():
 def test_translate_openai_response_to_anthropic_input_tokens_excludes_cached_tokens():
     """
     Regression test: input_tokens in Anthropic format should NOT include cached tokens.
-    
+
     Issue: v1/messages API was returning incorrect input_token count when using prompt caching.
     The OpenAI format includes cached tokens in prompt_tokens, but Anthropic format should not.
-    
+
     According to Anthropic's spec:
     - input_tokens = uncached input tokens only
     - cache_read_input_tokens = tokens read from cache
-    
+
     In OpenAI format:
     - prompt_tokens = all input tokens (including cached)
     - prompt_tokens_details.cached_tokens = cached tokens
-    
+
     Expected: anthropic.input_tokens = openai.prompt_tokens - openai.prompt_tokens_details.cached_tokens
     """
     from litellm.types.utils import PromptTokensDetailsWrapper
@@ -1751,12 +1809,10 @@ def test_translate_openai_response_to_anthropic_input_tokens_excludes_cached_tok
         prompt_tokens=100,
         completion_tokens=50,
         total_tokens=150,
-        prompt_tokens_details=PromptTokensDetailsWrapper(
-            cached_tokens=30
-        ),
+        prompt_tokens_details=PromptTokensDetailsWrapper(cached_tokens=30),
         cache_read_input_tokens=30,  # Anthropic format cache info
     )
-    
+
     response = ModelResponse(
         id="test-id",
         choices=[
@@ -1772,14 +1828,14 @@ def test_translate_openai_response_to_anthropic_input_tokens_excludes_cached_tok
         model="claude-3-sonnet-20240229",
         usage=usage,
     )
-    
+
     # Convert to Anthropic format
     adapter = LiteLLMAnthropicMessagesAdapter()
     anthropic_response = adapter.translate_openai_response_to_anthropic(
         response=response,
         tool_name_mapping=None,
     )
-    
+
     # Validate: input_tokens should be 70 (100 - 30 cached), not 100
     assert anthropic_response["usage"]["input_tokens"] == 70, (
         f"Expected input_tokens=70 (100 total - 30 cached), "
@@ -1802,7 +1858,7 @@ def test_translate_openai_response_to_anthropic_input_tokens_no_cache():
         completion_tokens=50,
         total_tokens=150,
     )
-    
+
     response = ModelResponse(
         id="test-id",
         choices=[
@@ -1818,14 +1874,14 @@ def test_translate_openai_response_to_anthropic_input_tokens_no_cache():
         model="claude-3-sonnet-20240229",
         usage=usage,
     )
-    
+
     # Convert to Anthropic format
     adapter = LiteLLMAnthropicMessagesAdapter()
     anthropic_response = adapter.translate_openai_response_to_anthropic(
         response=response,
         tool_name_mapping=None,
     )
-    
+
     # Validate: input_tokens should equal prompt_tokens when no caching
     assert anthropic_response["usage"]["input_tokens"] == 100
     assert anthropic_response["usage"]["output_tokens"] == 50
@@ -1844,9 +1900,7 @@ def test_translate_openai_response_to_anthropic_cache_tokens_from_prompt_tokens_
         prompt_tokens=100,
         completion_tokens=50,
         total_tokens=150,
-        prompt_tokens_details=PromptTokensDetailsWrapper(
-            cached_tokens=30
-        ),
+        prompt_tokens_details=PromptTokensDetailsWrapper(cached_tokens=30),
     )
 
     response = ModelResponse(
@@ -1978,9 +2032,7 @@ def test_translate_anthropic_to_openai_with_mixed_tools():
                 "description": "Get weather information",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "location": {"type": "string"}
-                    },
+                    "properties": {"location": {"type": "string"}},
                 },
             },
         ],
