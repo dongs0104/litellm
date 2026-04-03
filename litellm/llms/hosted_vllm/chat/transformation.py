@@ -2,7 +2,7 @@
 Translate from OpenAI's `/v1/chat/completions` to VLLM's `/v1/chat/completions`
 """
 
-from typing import Any, Coroutine, List, Literal, Optional, Tuple, Union, cast, overload
+from typing import Any, Coroutine, Iterator, List, Literal, Optional, Tuple, Union, cast, overload
 
 from litellm.litellm_core_utils.prompt_templates.common_utils import (
     _get_image_mime_type_from_url,
@@ -15,9 +15,13 @@ from litellm.types.llms.openai import (
     ChatCompletionVideoObject,
     ChatCompletionVideoUrlObject,
 )
+from litellm.types.utils import ChatCompletionThinkingBlock, ModelResponseStream
 
 from ....utils import _remove_additional_properties, _remove_strict_from_schema
-from ...openai.chat.gpt_transformation import OpenAIGPTConfig
+from ...openai.chat.gpt_transformation import (
+    OpenAIChatCompletionStreamingHandler,
+    OpenAIGPTConfig,
+)
 
 
 class HostedVLLMChatConfig(OpenAIGPTConfig):
@@ -62,9 +66,7 @@ class HostedVLLMChatConfig(OpenAIGPTConfig):
                     else:
                         non_default_params["reasoning_effort"] = "minimal"
 
-        return super().map_openai_params(
-            non_default_params, optional_params, model, drop_params
-        )
+        return super().map_openai_params(non_default_params, optional_params, model, drop_params)
 
     def _get_openai_compatible_provider_info(
         self, api_base: Optional[str], api_key: Optional[str]
@@ -101,28 +103,21 @@ class HostedVLLMChatConfig(OpenAIGPTConfig):
                 return True
         return False
 
-    def _convert_file_to_video_url(
-        self, content_item: ChatCompletionFileObject
-    ) -> ChatCompletionVideoObject:
+    def _convert_file_to_video_url(self, content_item: ChatCompletionFileObject) -> ChatCompletionVideoObject:
         file = content_item.get("file", {})
         file_id = file.get("file_id")
         file_data = file.get("file_data")
 
         if file_id:
-            return ChatCompletionVideoObject(
-                type="video_url", video_url=ChatCompletionVideoUrlObject(url=file_id)
-            )
+            return ChatCompletionVideoObject(type="video_url", video_url=ChatCompletionVideoUrlObject(url=file_id))
         elif file_data:
-            return ChatCompletionVideoObject(
-                type="video_url", video_url=ChatCompletionVideoUrlObject(url=file_data)
-            )
+            return ChatCompletionVideoObject(type="video_url", video_url=ChatCompletionVideoUrlObject(url=file_data))
         raise ValueError("file_id or file_data is required")
 
     @overload
     def _transform_messages(
         self, messages: List[AllMessageValues], model: str, is_async: Literal[True]
-    ) -> Coroutine[Any, Any, List[AllMessageValues]]:
-        ...
+    ) -> Coroutine[Any, Any, List[AllMessageValues]]: ...
 
     @overload
     def _transform_messages(
@@ -130,8 +125,7 @@ class HostedVLLMChatConfig(OpenAIGPTConfig):
         messages: List[AllMessageValues],
         model: str,
         is_async: Literal[False] = False,
-    ) -> List[AllMessageValues]:
-        ...
+    ) -> List[AllMessageValues]: ...
 
     def _transform_messages(
         self, messages: List[AllMessageValues], model: str, is_async: bool = False
@@ -139,44 +133,74 @@ class HostedVLLMChatConfig(OpenAIGPTConfig):
         """
         Support translating:
         - video files from file_id or file_data to video_url
-        - thinking_blocks on assistant messages to content blocks
+        - thinking_blocks on assistant messages to reasoning_content
+
+        vLLM is OpenAI-compatible and uses reasoning_content as the
+        standard field for reasoning/thinking content. Thinking blocks
+        are extracted and set as reasoning_content on the message.
+        Redacted thinking blocks are dropped (opaque Anthropic data).
         """
         for message in messages:
             if message["role"] == "assistant":
                 thinking_blocks = message.pop("thinking_blocks", None)  # type: ignore
-                if thinking_blocks:
-                    new_content: list = [
-                        {"type": block["type"], "thinking": block.get("thinking", "")}
-                        if block.get("type") == "thinking"
-                        else {"type": block["type"], "data": block.get("data", "")}
-                        for block in thinking_blocks
-                    ]
-                    existing_content = message.get("content")
-                    if isinstance(existing_content, str):
-                        new_content.append({"type": "text", "text": existing_content})
-                    elif isinstance(existing_content, list):
-                        new_content.extend(existing_content)
-                    message["content"] = new_content  # type: ignore
+                if thinking_blocks and "reasoning_content" not in message:
+                    reasoning_text = "\n".join(
+                        block.get("thinking", "") for block in thinking_blocks if block.get("type") == "thinking"
+                    )
+                    if reasoning_text:
+                        message["reasoning_content"] = reasoning_text  # type: ignore
             elif message["role"] == "user":
                 message_content = message.get("content")
                 if message_content and isinstance(message_content, list):
-                    replaced_content_items: List[
-                        Tuple[int, ChatCompletionFileObject]
-                    ] = []
+                    replaced_content_items: List[Tuple[int, ChatCompletionFileObject]] = []
                     for idx, content_item in enumerate(message_content):
                         if content_item.get("type") == "file":
                             content_item = cast(ChatCompletionFileObject, content_item)
                             if self._is_video_file(content_item):
                                 replaced_content_items.append((idx, content_item))
                     for idx, content_item in replaced_content_items:
-                        message_content[idx] = self._convert_file_to_video_url(
-                            content_item
-                        )
+                        message_content[idx] = self._convert_file_to_video_url(content_item)
         if is_async:
-            return super()._transform_messages(
-                messages, model, is_async=cast(Literal[True], True)
-            )
+            return super()._transform_messages(messages, model, is_async=cast(Literal[True], True))
         else:
-            return super()._transform_messages(
-                messages, model, is_async=cast(Literal[False], False)
-            )
+            return super()._transform_messages(messages, model, is_async=cast(Literal[False], False))
+
+    def get_model_response_iterator(
+        self,
+        streaming_response: Union[Iterator[str], Any],
+        sync_stream: bool,
+        json_mode: Optional[bool] = False,
+    ) -> Any:
+        return HostedVLLMChatCompletionStreamingHandler(
+            streaming_response=streaming_response,
+            sync_stream=sync_stream,
+            json_mode=json_mode,
+        )
+
+
+class HostedVLLMChatCompletionStreamingHandler(OpenAIChatCompletionStreamingHandler):
+    """
+    vLLM streaming handler that converts reasoning_content to thinking_blocks.
+
+    vLLM returns reasoning content via delta.reasoning_content, but the
+    Anthropic pass-through adapter only recognizes delta.thinking_blocks
+    for block type detection. This handler bridges that gap by promoting
+    reasoning_content to thinking_blocks on each streaming chunk.
+    """
+
+    def chunk_parser(self, chunk: dict) -> ModelResponseStream:
+        response = super().chunk_parser(chunk)
+        for choice in response.choices:
+            if (
+                hasattr(choice.delta, "reasoning_content")
+                and choice.delta.reasoning_content
+                and not getattr(choice.delta, "thinking_blocks", None)
+            ):
+                choice.delta.thinking_blocks = [
+                    ChatCompletionThinkingBlock(
+                        type="thinking",
+                        thinking=choice.delta.reasoning_content,
+                        signature="",
+                    )
+                ]
+        return response
