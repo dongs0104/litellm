@@ -65,8 +65,10 @@ async def afetch(
         max_content_tokens: Soft cap on returned content length (in tokens).
             Providers that support server-side truncation honor this; others
             fall back to a char-based approximation.
-        allowed_domains: Optional allowlist. If provided and the URL's host is
-            not in the list, the fetch is refused.
+        allowed_domains: Optional allowlist of **exact** hostnames (no subdomain
+            matching). If provided and the URL's host is not in the list, the
+            fetch is refused. ``example.com`` does *not* match ``sub.example.com`` —
+            list each subdomain explicitly if you need it.
         api_key / api_base / timeout / extra_headers: Provider connection
             options.
         allow_direct_fetch: Required to use ``provider="direct_httpx"``. Every

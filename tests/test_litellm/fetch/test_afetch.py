@@ -121,29 +121,46 @@ async def test_direct_httpx_blocks_private_and_metadata(bad_url):
         await afetch(bad_url, provider="direct_httpx", allow_direct_fetch=True)
 
 
+class _FakeStreamResponse:
+    def __init__(self, status_code, headers=None, body=b""):
+        self.status_code = status_code
+        self.headers = headers or {}
+        self._body = body
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def aiter_bytes(self):
+        yield self._body
+
+
+def _stream_sequence(*responses):
+    it = iter(responses)
+
+    def fake_stream(self, method, url, headers=None, extensions=None):
+        return next(it)
+
+    return fake_stream
+
+
 @pytest.mark.asyncio
 async def test_direct_httpx_blocks_redirect_to_private(monkeypatch):
     """Redirect chain must re-validate after each hop."""
-    call_count = {"n": 0}
+    monkeypatch.setattr(
+        httpx.AsyncClient,
+        "stream",
+        _stream_sequence(
+            _FakeStreamResponse(
+                status_code=302, headers={"location": "http://127.0.0.1/"}
+            ),
+            _FakeStreamResponse(status_code=200, body=b"should not reach"),
+        ),
+    )
 
-    async def fake_get(self, url, headers=None):
-        call_count["n"] += 1
-        if call_count["n"] == 1:
-            return httpx.Response(
-                status_code=302,
-                headers={"location": "http://127.0.0.1/"},
-                request=httpx.Request("GET", url),
-            )
-        return httpx.Response(
-            status_code=200,
-            content=b"should not reach",
-            headers={"content-type": "text/plain"},
-            request=httpx.Request("GET", url),
-        )
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
-
-    with pytest.raises(FetchError, match="blocked address"):
+    with pytest.raises(FetchError, match="blocked"):
         await afetch(
             "https://example.com/redirect",
             provider="direct_httpx",
@@ -153,18 +170,49 @@ async def test_direct_httpx_blocks_redirect_to_private(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_direct_httpx_rejects_non_allowlisted_content_type(monkeypatch):
-    async def fake_get(self, url, headers=None):
-        return httpx.Response(
-            status_code=200,
-            content=b"\x00\x01binary",
-            headers={"content-type": "application/octet-stream"},
-            request=httpx.Request("GET", url),
-        )
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(
+        httpx.AsyncClient,
+        "stream",
+        _stream_sequence(
+            _FakeStreamResponse(
+                status_code=200,
+                headers={"content-type": "application/octet-stream"},
+                body=b"\x00\x01binary",
+            )
+        ),
+    )
     with pytest.raises(FetchError, match="content-type"):
         await afetch(
             "https://example.com/file",
+            provider="direct_httpx",
+            allow_direct_fetch=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_direct_httpx_enforces_streaming_size_cap(monkeypatch):
+    """Oversized response must raise without buffering the full body."""
+    from litellm.fetch.providers import direct_httpx as dh
+
+    class _HugeStream(_FakeStreamResponse):
+        async def aiter_bytes(self):
+            chunk = b"x" * 1024
+            # yield until we exceed the cap
+            total = 0
+            while total <= dh._MAX_RESPONSE_BYTES + 1024:
+                yield chunk
+                total += len(chunk)
+
+    monkeypatch.setattr(
+        httpx.AsyncClient,
+        "stream",
+        _stream_sequence(
+            _HugeStream(status_code=200, headers={"content-type": "text/plain"})
+        ),
+    )
+    with pytest.raises(FetchError, match="exceeded max size"):
+        await afetch(
+            "https://example.com/huge",
             provider="direct_httpx",
             allow_direct_fetch=True,
         )
