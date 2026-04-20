@@ -3,11 +3,12 @@ import os
 import sys
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(
-    0, os.path.abspath("../../../../..")
-)  # Adds the parent directory to the system path
+sys.path.insert(0, os.path.abspath("../../../../.."))  # Adds the parent directory to the system path
 
-from litellm.llms.hosted_vllm.chat.transformation import HostedVLLMChatConfig
+from litellm.llms.hosted_vllm.chat.transformation import (
+    HostedVLLMChatConfig,
+    HostedVLLMChatCompletionStreamingHandler,
+)
 
 
 def test_hosted_vllm_chat_transformation_file_url():
@@ -107,9 +108,7 @@ def test_hosted_vllm_chat_transformation_with_audio_url():
 
 def test_hosted_vllm_supports_reasoning_effort():
     config = HostedVLLMChatConfig()
-    supported_params = config.get_supported_openai_params(
-        model="hosted_vllm/gpt-oss-120b"
-    )
+    supported_params = config.get_supported_openai_params(model="hosted_vllm/gpt-oss-120b")
     assert "reasoning_effort" in supported_params
     optional_params = config.map_openai_params(
         non_default_params={"reasoning_effort": "high"},
@@ -130,9 +129,7 @@ def test_hosted_vllm_supports_thinking():
     Related issue: https://github.com/BerriAI/litellm/issues/19761
     """
     config = HostedVLLMChatConfig()
-    supported_params = config.get_supported_openai_params(
-        model="hosted_vllm/GLM-4.6-FP8"
-    )
+    supported_params = config.get_supported_openai_params(model="hosted_vllm/GLM-4.6-FP8")
     assert "thinking" in supported_params
 
     # Test thinking with low budget_tokens -> "minimal" (for < 2000)
@@ -167,10 +164,13 @@ def test_hosted_vllm_supports_thinking():
     assert optional_params["reasoning_effort"] == "low"
 
 
-def test_hosted_vllm_thinking_blocks_prepended_to_assistant_content():
+def test_hosted_vllm_thinking_blocks_converted_to_reasoning_content():
     """
-    Test that thinking_blocks on assistant messages are converted to content
-    blocks prepended before the existing content.
+    Test that thinking_blocks on assistant messages are converted to
+    reasoning_content field (OpenAI-compatible format for vLLM).
+
+    Thinking blocks should NOT be added to the content array since vLLM
+    only accepts standard OpenAI content types (text, image_url, etc.).
     """
     config = HostedVLLMChatConfig()
     messages = [
@@ -203,21 +203,17 @@ def test_hosted_vllm_thinking_blocks_prepended_to_assistant_content():
     )
     assistant_msg = transformed["messages"][1]
     assert assistant_msg["role"] == "assistant"
-    assert isinstance(assistant_msg["content"], list)
-    assert assistant_msg["content"][0] == {
-        "type": "thinking",
-        "thinking": "Let me reason about this...",
-    }
-    assert assistant_msg["content"][1] == {
-        "type": "text",
-        "text": "Here is my answer.",
-    }
+    # Content stays as-is (not modified by thinking_blocks)
+    assert assistant_msg["content"] == "Here is my answer."
+    # Thinking is extracted to reasoning_content
+    assert assistant_msg.get("reasoning_content") == "Let me reason about this..."
     assert "thinking_blocks" not in assistant_msg
 
 
 def test_hosted_vllm_thinking_blocks_with_list_content():
     """
-    Test thinking_blocks prepended when assistant content is already a list.
+    Test thinking_blocks converted to reasoning_content when assistant
+    content is already a list. Content should remain unchanged.
     """
     config = HostedVLLMChatConfig()
     messages = [
@@ -246,14 +242,171 @@ def test_hosted_vllm_thinking_blocks_with_list_content():
         headers={},
     )
     assistant_msg = transformed["messages"][0]
-    assert len(assistant_msg["content"]) == 3
-    assert assistant_msg["content"][0] == {
-        "type": "thinking",
-        "thinking": "Step 1 reasoning",
-    }
-    assert assistant_msg["content"][1] == {
-        "type": "thinking",
-        "thinking": "Step 2 reasoning",
-    }
-    assert assistant_msg["content"][2] == {"type": "text", "text": "Response text"}
+    # Content stays as-is
+    assert assistant_msg["content"] == [{"type": "text", "text": "Response text"}]
+    # Thinking blocks are joined into reasoning_content
+    assert assistant_msg.get("reasoning_content") == "Step 1 reasoning\nStep 2 reasoning"
     assert "thinking_blocks" not in assistant_msg
+
+
+def test_hosted_vllm_redacted_thinking_blocks_dropped():
+    """
+    Redacted thinking blocks should be ignored — they contain opaque
+    Anthropic-specific data with no value for vLLM.
+    """
+    config = HostedVLLMChatConfig()
+    messages = [
+        {
+            "role": "assistant",
+            "content": "Answer.",
+            "thinking_blocks": [
+                {
+                    "type": "thinking",
+                    "thinking": "Let me think step by step...",
+                    "signature": "sig1",
+                },
+                {"type": "redacted_thinking", "data": "opaque_data"},
+            ],
+        },
+    ]
+    transformed = config.transform_request(
+        model="hosted_vllm/deepseek-r1",
+        messages=messages,
+        optional_params={},
+        litellm_params={},
+        headers={},
+    )
+    assistant_msg = transformed["messages"][0]
+    assert assistant_msg.get("reasoning_content") == "Let me think step by step..."
+    assert "thinking_blocks" not in assistant_msg
+
+
+def test_hosted_vllm_existing_reasoning_content_not_overwritten():
+    """
+    If reasoning_content is already set on the message, it should not be
+    overwritten by thinking_blocks extraction.
+    """
+    config = HostedVLLMChatConfig()
+    messages = [
+        {
+            "role": "assistant",
+            "content": "Answer.",
+            "reasoning_content": "Original reasoning.",
+            "thinking_blocks": [
+                {"type": "thinking", "thinking": "New thought.", "signature": "s1"},
+            ],
+        },
+    ]
+    transformed = config.transform_request(
+        model="hosted_vllm/deepseek-r1",
+        messages=messages,
+        optional_params={},
+        litellm_params={},
+        headers={},
+    )
+    assistant_msg = transformed["messages"][0]
+    assert assistant_msg.get("reasoning_content") == "Original reasoning."
+
+
+def test_hosted_vllm_streaming_handler_promotes_reasoning_content_to_thinking_blocks():
+    """
+    The vLLM streaming handler should convert reasoning_content to
+    thinking_blocks so the Anthropic pass-through adapter can detect
+    the correct block type.
+    """
+    handler = HostedVLLMChatCompletionStreamingHandler(
+        streaming_response=iter([]),
+        sync_stream=True,
+        json_mode=False,
+    )
+    chunk = {
+        "id": "chatcmpl-test",
+        "object": "chat.completion.chunk",
+        "created": 1234567890,
+        "model": "deepseek-r1",
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "reasoning_content": "Let me think about this...",
+                },
+                "finish_reason": None,
+            }
+        ],
+    }
+    response = handler.chunk_parser(chunk)
+    delta = response.choices[0].delta
+
+    assert hasattr(delta, "thinking_blocks")
+    assert delta.thinking_blocks is not None
+    assert len(delta.thinking_blocks) == 1
+    assert delta.thinking_blocks[0]["type"] == "thinking"
+    assert delta.thinking_blocks[0]["thinking"] == "Let me think about this..."
+
+
+def test_hosted_vllm_streaming_handler_no_thinking_blocks_without_reasoning():
+    """
+    When there's no reasoning_content in the chunk, thinking_blocks
+    should not be added.
+    """
+    handler = HostedVLLMChatCompletionStreamingHandler(
+        streaming_response=iter([]),
+        sync_stream=True,
+        json_mode=False,
+    )
+    chunk = {
+        "id": "chatcmpl-test",
+        "object": "chat.completion.chunk",
+        "created": 1234567890,
+        "model": "deepseek-r1",
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "content": "Hello!",
+                },
+                "finish_reason": None,
+            }
+        ],
+    }
+    response = handler.chunk_parser(chunk)
+    delta = response.choices[0].delta
+
+    assert not getattr(delta, "thinking_blocks", None)
+    assert delta.content == "Hello!"
+
+
+def test_hosted_vllm_streaming_handler_existing_thinking_blocks_not_overwritten():
+    """
+    If thinking_blocks already exist on the delta, reasoning_content
+    should not overwrite them.
+    """
+    handler = HostedVLLMChatCompletionStreamingHandler(
+        streaming_response=iter([]),
+        sync_stream=True,
+        json_mode=False,
+    )
+    chunk = {
+        "id": "chatcmpl-test",
+        "object": "chat.completion.chunk",
+        "created": 1234567890,
+        "model": "deepseek-r1",
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "reasoning_content": "From reasoning_content field",
+                    "thinking_blocks": [
+                        {"type": "thinking", "thinking": "From thinking_blocks", "signature": ""},
+                    ],
+                },
+                "finish_reason": None,
+            }
+        ],
+    }
+    response = handler.chunk_parser(chunk)
+    delta = response.choices[0].delta
+
+    assert delta.thinking_blocks is not None
+    assert len(delta.thinking_blocks) == 1
+    assert delta.thinking_blocks[0]["thinking"] == "From thinking_blocks"

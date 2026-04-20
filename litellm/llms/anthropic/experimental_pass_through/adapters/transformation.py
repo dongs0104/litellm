@@ -486,6 +486,18 @@ class LiteLLMAnthropicMessagesAdapter:
                                                 content, tool_result, model
                                             )
                                             tool_message_list.append(tool_result)  # type: ignore[arg-type]
+                                        else:
+                                            tool_result = ChatCompletionToolMessage(
+                                                role="tool",
+                                                tool_call_id=content.get(
+                                                    "tool_use_id", ""
+                                                ),
+                                                content=json.dumps(c),
+                                            )
+                                            self._add_cache_control_if_applicable(
+                                                content, tool_result, model
+                                            )
+                                            tool_message_list.append(tool_result)
                                 else:
                                     # For multiple content items, combine into a single tool message
                                     # with list content to preserve all items while having one tool_use_id
@@ -527,6 +539,15 @@ class LiteLLMAnthropicMessagesAdapter:
                                                             ),
                                                         )
                                                     )
+                                            else:
+                                                # Preserve unrecognized content types
+                                                # (e.g. tool_reference) by serializing to JSON text
+                                                combined_content_parts.append(
+                                                    ChatCompletionTextObject(
+                                                        type="text",
+                                                        text=json.dumps(c),
+                                                    )
+                                                )
                                     # Create a single tool message with combined content
                                     if combined_content_parts:
                                         tool_result = ChatCompletionToolMessage(
@@ -796,7 +817,7 @@ class LiteLLMAnthropicMessagesAdapter:
         tool_name_mapping: Dict[str, str] = {}
         mapped_tool_params = ["name", "input_schema", "description", "cache_control"]
 
-        for tool in tools:
+        for idx, tool in enumerate(tools):
             # Check if this is an Anthropic-native tool that should be kept as-is
             tool_type = tool.get("type", "")
             if any(tool_type.startswith(t.value) for t in ANTHROPIC_HOSTED_TOOLS):
@@ -804,7 +825,13 @@ class LiteLLMAnthropicMessagesAdapter:
                 new_tools.append(tool)  # type: ignore[arg-type]
                 continue
 
-            original_name = tool["name"]
+            raw_name = tool.get("name")
+            if raw_name is None or (
+                isinstance(raw_name, str) and not str(raw_name).strip()
+            ):
+                original_name = f"litellm_unnamed_tool_{idx}"
+            else:
+                original_name = str(raw_name)
             truncated_name = truncate_tool_name(original_name)
 
             # Store mapping if name was truncated
